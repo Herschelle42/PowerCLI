@@ -3,19 +3,19 @@
   Reset VM resource configuration back to standard settings
 .Description
   Changes VM the following resource configuration settings
-  Disk IOPs Limit  : unlimited
-  Disk Shares      : Normal
-  CPU Limit        : unlimited
-  CPU Reservation  : None
-  CPU Shares       : Normal
-  Mem Rerv all max : Off
-  Mem Limit        : unlimited
-  Mem Reservation  : None
-  Mem Shares       : Normal
+  Disk IOPs Limit    : unlimited
+  Disk Shares        : Normal
+  CPU Limit          : unlimited
+  CPU Reservation    : None
+  CPU Shares         : Normal
+  Mem Reserv all max : Off
+  Mem Limit          : unlimited
+  Mem Reservation    : None
+  Mem Shares         : Normal
 .References
   http://leetcloud.blogspot.com.au/2014/03/set-disk-iops-shares-shares-level-for.html
 #>
-$vm = Get-vm -Name myvm
+$vm = Get-vm -Name "myvm"
 
 #get current resource configuration
 $vmconf = Get-VMResourceConfiguration -VM $vm
