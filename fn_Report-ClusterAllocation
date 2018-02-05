@@ -29,6 +29,7 @@ function Report-ClusterAllocation
 	begin {
 		$vmCPU = @{Name="vmCPU"; Expression={$_.Summary.Config.NumCpu} }
 		$vmMemGB = @{Name="vmMemGB"; Expression={ [Math]::Round($_.Summary.Config.MemorySizeMB/1KB, 0) } }
+		$ISODate = Get-Date -uFormat "%Y-%m-%d"
 
 	} #end begin
 	
@@ -87,7 +88,7 @@ function Report-ClusterAllocation
 			$hash.ClusterVMMemGB = $clusterVMMemGB
 			$hash.MemoryRatio = $MemRatio
 		        $object = new-object PSObject -property $hash
-		 	$object | Select Date, vCenter, ClusterName, HostCount, VMCount, ClusterCores, ClusterVMCPU, CPURatio, ClusterMemoryGB, ClusterVMMemGB, MemoryRatio, AvailVMs1vCPU, AvailVMs2GBMem, CPULimit, MemoryLimit, MaxAllocation
+		 	$object | Select Date, vCenter, ClusterName, HostCount, VMCount, ClusterCores, ClusterVMCPU, CPURatio, ClusterMemoryGB, ClusterVMMemGB, MemoryRatio
 			
 		} #end cluster foreach
 
