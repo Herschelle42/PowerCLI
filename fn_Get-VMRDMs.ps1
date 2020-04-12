@@ -32,7 +32,11 @@ function Get-VMRDMs
 
     Begin
     {
+      #Add test for PowerCLI snapins and or modules loaded
 
+      #add test for PowerCLI version. 5.1 + has CapacityInKB where 5.0 does not. It has Capacity (in bytes)?
+
+      #add test for vCenter connectivity
 
     } #end being block 
 
@@ -42,28 +46,20 @@ function Get-VMRDMs
       {
         Write-Verbose "Processing VMHost [$($item)]"
 
-        #$vmhost = (Get-View -ViewType HostSystem -Property Name -Filter @{"Name"=$item}).Moref.Value
-        #$vmhost = Get-View -ViewType HostSystem -Filter @{"Name"=$item}
         $vmhost = Get-View -ViewType HostSystem -Property Name, vm -Filter @{"Name"=$item}
-        #$vmhost
 
         #$vmlist = Get-View -ViewType VirtualMachine -Property Name, Config.Hardware.Device, Runtime -Filter @{"Runtime.Host.Value"=$vmhost}
         [array]$vmlist = $vmhost | % { Get-View -ViewType VirtualMachine -SearchRoot $_.Moref -Filter @{"Config.Template"="false"} }
-        #$vmlist | Select Name | Sort Name
 
         if ($vmlist)
         {
             foreach ($vm in $vmlist)
             {
                 #DiskTypes : rawVirtual, rawPhysical, flat, unknown
-                #$vm.Config.Hardware.Device[10].gettype().Name = VirtualDisk
-                
-                #Get all Virtual Disk devices that have a Compatibility Mode. This will return both physicalMode and virtualMode.
+                #Get all Virtual Disk devices that have a Compatibility Mode. e.g. physicalMode and virtualMode.
                 #Normal VMDK\HDD will not have any value in Compatibility Mode.
                 foreach ($dev in $vm.Config.Hardware.Device | ? { $_.gettype().name -eq "VirtualDisk" -and $_.Backing.CompatibilityMode } )
                 {
-                  
-
                   $properties = [Ordered]@{
                     'VMName'=$vm.Name; 
                     'VMHost'=$vmhost.Name;
@@ -91,4 +87,39 @@ function Get-VMRDMs
     } #end End Block
 
 } #end function
+
+Get-VMRDMs -VMHostName "devesxi1.corp.local","prodesxi1.corp.local" -Verbose
+
+<#
+
+VMName        : S1SQL1
+VMHost        : devesxi1.corp.local
+HDDName       : Hard disk 3
+HDDMode       : physicalMode
+HDDCapacityKB : 20971520
+
+
+$report = @()
+$vms = Get-VM | Get-View
+foreach($vm in $vms){
+     foreach($dev in $vm.Config.Hardware.Device){
+          if(($dev.gettype()).Name -eq "VirtualDisk"){
+               if(($dev.Backing.CompatibilityMode -eq "physicalMode") -or
+               ($dev.Backing.CompatibilityMode -eq "virtualMode")){
+                    $row = "" | select VMName, VMHost, HDDeviceName, HDFileName, HDMode, HDsize, HDDisplayName
+                    $row.VMName = $vm.Name
+                    $esx = Get-View $vm.Runtime.Host
+                    $row.VMHost = ($esx).Name
+                    $row.HDDeviceName = $dev.Backing.DeviceName
+                    $row.HDFileName = $dev.Backing.FileName
+                    $row.HDMode = $dev.Backing.CompatibilityMode
+                    $row.HDSize = $dev.CapacityInKB
+                    $row.HDDisplayName = ($esx.Config.StorageDevice.ScsiLun | where {$_.Uuid -eq $dev.Backing.LunUuid}).DisplayName
+                    $report += $row
+               }
+          }
+     }
+}
+$report
+#>
 
