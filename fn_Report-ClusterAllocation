@@ -1,0 +1,97 @@
+function Report-ClusterAllocation
+{
+<#
+  .SYNOPSIS  Reports on the cluster utilisation based on the metrics supplied
+  .NOTES
+    Date:      2017-10-13
+    Version:   1.2
+    Authors:   Clint Fritz
+  .PARAMETER  Server
+    The vCenter server(s) to report on
+  .EXAMPLE
+    PS> Report-ClusterAllocation -Server $global:DefaultVIServer
+#>
+	
+	#Requires -Version 2.0
+	#Requires -Module VMware.VimAutomation.Core
+	  
+	param(
+	  [CmdletBinding()]
+	  [Parameter(ParameterSetName = "Default",
+	  ValueFromPipeline = $true,
+	  Mandatory = $true,
+	  Position = 0,
+	  HelpMessage = "vCenter server")]
+	  [VMware.VimAutomation.ViCore.Util10.VersionedObjectImpl]$Server
+	
+	)
+	
+	begin {
+		$vmCPU = @{Name="vmCPU"; Expression={$_.Summary.Config.NumCpu} }
+		$vmMemGB = @{Name="vmMemGB"; Expression={ [Math]::Round($_.Summary.Config.MemorySizeMB/1KB, 0) } }
+		$ISODate = Get-Date -uFormat "%Y-%m-%d"
+
+	} #end begin
+	
+	
+	process {
+		
+		$clusterlist = Get-View -Server $server -ViewType ClusterComputeResource -Property Name, Summary.NumHosts, Summary.EffectiveMemory, Summary.TotalMemory, Summary.NumCpuCores | Sort-Object Name
+	
+		#Get VM level information from each cluster
+		foreach ($cluster in $clusterlist)
+		{
+			#extract the vcenter name from the ServiceUrl
+			#$vCenter = $cluster.Client.ServiceUrl.Substring( ($cluster.Client.ServiceUrl.IndexOf("//")+2), ($cluster.Client.ServiceUrl.LastIndexOf("/") - $cluster.Client.ServiceUrl.IndexOf("//")-2) )
+			$vCenter = $server.name
+			$clusterName = $cluster.Name
+			$clusterCores = $cluster.Summary.NumCpuCores
+			$clusterMemoryGB = [Math]::Round($cluster.Summary.TotalMemory/1GB, 0)
+                        #testing if cluster is empty of hosts
+			if ($cluster.Summary.NumHosts)
+			{
+				$hostcount = $cluster.Summary.NumHosts
+                        } else {
+            	                $hostcount = 0
+			}#end if hostcount
+			
+			#Get list of VMs in this cluster
+			[array]$vmlist = Get-View -Server $server -ViewType VirtualMachine -SearchRoot $cluster.MoRef -Property Name, Summary.Config.NumCpu, Summary.Config.MemorySizeMB -filter @{"Config.Template"="false"}
+			$VMCount = 0
+			$clusterVMCPU = 0
+			$clusterVMMemGB = 0
+			$CPURatio = 0
+			$MemRatio = 0
+		
+			#If there are no VMs then there are no calculations to do.
+			if ($vmlist)
+			{
+				$VMCount = $vmlist.Count
+				$clusterVMCPU = ($vmlist | Select $vmCPU | Measure-Object -Property vmCPU -SUM).Sum
+				$clusterVMMemGB = ($vmlist | Select $vmMemGB | Measure-Object -Property vmMemGB -SUM).Sum
+				
+				$CPURatio = [Math]::Round( $clusterVMCPU / $ClusterCores,2)
+				$MemRatio = [Math]::Round( $clusterVMMemGB / $ClusterMemoryGB,2)
+						
+			} #end if vmcount
+			
+			$hash = @{}
+			$hash.Date = $ISODate
+			$hash.vCenter = $vCenter
+			$hash.ClusterName = $ClusterName
+			$hash.HostCount = $HostCount
+			$hash.VMCount = $VMCount
+			$hash.ClusterCores = $ClusterCores
+			$hash.ClusterVMCPU = $clusterVMCPU
+			$hash.CPURatio = $CPURatio
+			$hash.ClusterMemoryGB = $ClusterMemoryGB
+			$hash.ClusterVMMemGB = $clusterVMMemGB
+			$hash.MemoryRatio = $MemRatio
+		        $object = new-object PSObject -property $hash
+		 	$object | Select Date, vCenter, ClusterName, HostCount, VMCount, ClusterCores, ClusterVMCPU, CPURatio, ClusterMemoryGB, ClusterVMMemGB, MemoryRatio
+			
+		} #end cluster foreach
+
+	} #end Process block
+	
+} #end Function
