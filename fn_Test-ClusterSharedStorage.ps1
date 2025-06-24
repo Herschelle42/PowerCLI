@@ -1,4 +1,8 @@
 function Test-ClusterSharedStorage {
+<#
+.EXAMPLE
+  Get-Cluster | Test-ClusterSharedStorage | Sort Cluster, HostName | Export-Csv -NoTypeInformation -Path "..\reports\Cluster Shared Storage.csv"
+#>
     [CmdletBinding()]
     param (
         [Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
@@ -16,7 +20,7 @@ function Test-ClusterSharedStorage {
         foreach ($vmhost in $vmhostList) {
             $datastores = Get-Datastore -VMHost $vmhost | Where-Object {
                 $dsName = $_.Name
-            ($ExcludePatterns | Where-Object { $dsName -match $_ }) -eq $null
+            ($ExcludePatterns | Where-Object { $dsName -notmatch $_ -and $dsName -notmatch $vmhost.Name.substring(0, $vmhost.Name.indexOf(".")) })
             }
 
             $datastoresPerHost[$vmhost.Name] = $datastores.Name
