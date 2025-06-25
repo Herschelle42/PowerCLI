@@ -2,46 +2,41 @@ function Test-VDSwitchUplinkConsistency {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory, ValueFromPipelineByPropertyName)]
-        [string]$Name  # Expecting a cluster name
-
-        # Optional: Filter a specific VDS if desired
-        [string[]]$DistributedSwitch
+        [string]$Name
     )
 
     process {
         $cluster = Get-Cluster -Name $Name -ErrorAction Stop
         $hosts = Get-VMHost -Location $cluster
 
-        $results = foreach ($vmhost in $hosts) {
-            $hostNics = Get-VMHostNetworkAdapter -VMHost $vmhost | Where-Object {
-                $_.DistributedSwitch -ne $null -and
-                ($null -eq $DistributedSwitch -or $_.DistributedSwitch.Name -in $DistributedSwitch)
-            }
+        $uplinkInfo = foreach ($vmhost in $hosts) {
+            $view = Get-View -Id $vmhost.Id
 
-            $groupedByVDS = $hostNics | Group-Object { $_.DistributedSwitch.Name }
+            foreach ($proxySwitch in $view.Config.Network.ProxySwitch) {
+                $vdsName = $proxySwitch.DvsName
+                $uplinks = $proxySwitch.Spec.Backing.PnicSpec | ForEach-Object { $_.PnicDevice }
 
-            foreach ($group in $groupedByVDS) {
                 [PSCustomObject]@{
-                    Cluster        = $cluster.Name
-                    HostName       = $vmhost.Name
-                    VDSwitch       = $group.Name
-                    UplinkCount    = $group.Count
-                    UplinkDevices  = ($group.Group.DeviceName -join ', ')
+                    Cluster       = $cluster.Name
+                    HostName      = $vmhost.Name
+                    VDSwitch      = $vdsName
+                    UplinkCount   = $uplinks.Count
+                    UplinkDevices = $uplinks -join ', '
                 }
             }
         }
 
-        # Analyze consistency by VDS
-        $results | Group-Object VDSwitch | ForEach-Object {
-            $vdsGroup = $_.Group
-            $expected = $vdsGroup[0].UplinkCount
-            $inconsistent = $vdsGroup | Where-Object { $_.UplinkCount -ne $expected }
+        # Analyze consistency per VDS
+        $uplinkInfo | Group-Object VDSwitch | ForEach-Object {
+            $group = $_.Group
+            $expected = $group[0].UplinkCount
+            $inconsistent = $group | Where-Object { $_.UplinkCount -ne $expected }
 
             [PSCustomObject]@{
                 VDSwitch           = $_.Name
+                Cluster            = $group[0].Cluster
                 ExpectedUplinks    = $expected
-                Cluster            = $vdsGroup[0].Cluster
-                HostCount          = $vdsGroup.Count
+                HostCount          = $group.Count
                 Consistent         = ($inconsistent.Count -eq 0)
                 InconsistentHosts  = ($inconsistent.HostName -join ', ')
             }
